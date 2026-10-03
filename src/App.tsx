@@ -148,7 +148,7 @@ export default function App() {
 
     const catchUp = calculateCatchUpInfo(item, selectedSource);
     const remaining = Math.max(0, Math.round(catchUp.latestChapter - chapterNum));
-    if (useSource === 'roliascan') {
+    if (sourceToUse === 'roliascan') {
       showToast(`Opening RoliaScan series hub. Pick Chapter ${chapterNum} there.`);
     } else if (remaining > 0) {
       showToast(`Opened Ch. ${chapterNum}. ${remaining} more to catch up.`);
