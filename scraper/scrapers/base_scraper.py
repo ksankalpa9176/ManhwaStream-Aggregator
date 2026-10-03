@@ -34,12 +34,16 @@ class BaseScraper(ABC):
     def to_canonical_slug(title: str) -> str:
         if not title:
             return "manhwa"
-        t = title.lower()
+        t = title.lower().strip()
+        t = t.replace("\u2018", "'").replace("\u2019", "'")
+        t = t.replace("\u201c", '"').replace("\u201d", '"')
+        t = t.replace("\u2013", "-").replace("\u2014", "-")
+        t = t.replace("\u2026", "...")
         t = re.sub(r"\[.*?\]|\(.*?\)", "", t)
-        t = re.sub(r"\b(season|part|vol|volume|chapter|ch)\s*\d+", "", t, flags=re.IGNORECASE)
-        t = re.sub(r"\b(official|manhwa|manhua|manga|webtoon)\b", "", t, flags=re.IGNORECASE)
+        t = re.sub(r"\b(season|part|vol|volume|chapter|ch|ep|episode)\s*\d+", "", t, flags=re.IGNORECASE)
+        t = re.sub(r"\b(official|manhwa|manhua|manga|webtoon|scan|scans|translated|translation)\b", "", t, flags=re.IGNORECASE)
         t = re.sub(r"^(the|a|an)\s+", "", t)
-        t = re.sub(r"[''`]", "", t)
+        t = re.sub(r"['\"`]", "", t)
         t = re.sub(r"[^a-z0-9]+", "-", t).strip("-")
         return t or "manhwa"
 

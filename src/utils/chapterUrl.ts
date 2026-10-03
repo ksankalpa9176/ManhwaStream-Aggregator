@@ -9,12 +9,16 @@ export const KNOWN_SOURCES: Record<SourceId, { name: string; domain: string; def
 
 export function toCanonicalSlug(str: string): string {
   if (!str) return 'manhwa';
-  let t = str.toLowerCase();
+  let t = str.toLowerCase().trim();
+  t = t.replace(/[\u2018\u2019\u02BC\u02BB]/g, "'");
+  t = t.replace(/[\u201C\u201D]/g, '"');
+  t = t.replace(/[\u2013\u2014\u2015]/g, '-');
+  t = t.replace(/\u2026/g, '...');
   t = t.replace(/\[.*?\]|\(.*?\)/g, '');
-  t = t.replace(/\b(season|part|vol|volume|chapter|ch)\s*\d+/gi, '');
-  t = t.replace(/\b(official|manhwa|manhua|manga|webtoon)\b/gi, '');
+  t = t.replace(/\b(season|part|vol|volume|chapter|ch|ep|episode)\s*\d+/gi, '');
+  t = t.replace(/\b(official|manhwa|manhua|manga|webtoon|scan|scans|translated|translation)\b/gi, '');
   t = t.replace(/^(the|a|an)\s+/i, '');
-  t = t.replace(/[''`]/g, '');
+  t = t.replace(/['"`]/g, '');
   t = t.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   return t || 'manhwa';
 }
@@ -35,6 +39,7 @@ export function buildChapterUrlForSource(
   const suffix = formatSuffix(chapterNum);
   const slug = item.canonical_slug || toCanonicalSlug(item.title || 'manhwa');
 
+  // RoliaScan: ALWAYS series URL (chapter links unstable)
   if (sourceId === 'roliascan') {
     if (item.series_url && item.series_url.includes('roliascan.com')) {
       return item.series_url.replace(/\/chapter-[\d.-]+\/?$/, '/');
@@ -44,6 +49,7 @@ export function buildChapterUrlForSource(
     return `https://roliascan.com/manga/${slug}/`;
   }
 
+  // King of Shojo: kingofshojo.com/{slug}-chapter-{N}/
   if (sourceId === 'kingofshojo') {
     const existing = item.sources?.kingofshojo;
     if (existing?.url && existing.url.includes('-chapter-')) {
@@ -52,16 +58,23 @@ export function buildChapterUrlForSource(
     return `https://kingofshojo.com/${slug}-chapter-${suffix}/`;
   }
 
+  // ArenaScan: arenascan.com/{slug}-chapter-{N}/
   const existing = item.sources?.arenascan;
   if (existing?.url && existing.url.includes('arenascan.com')) {
-    const cleaned = existing.url.replace(/-chapter-/, '-');
-    return cleaned.replace(/-[\d.-]+\/?$/, `-${suffix}/`);
+    if (existing.url.includes('-chapter-')) {
+      return existing.url.replace(/-chapter-[\d.-]+\/?$/, `-chapter-${suffix}/`);
+    }
+    return existing.url.replace(/-[\d.-]+\/?$/, `-chapter-${suffix}/`);
   }
+
   if (item.latest_chapter_url && item.latest_chapter_url.includes('arenascan.com')) {
-    const cleaned = item.latest_chapter_url.replace(/-chapter-/, '-');
-    return cleaned.replace(/-[\d.-]+\/?$/, `-${suffix}/`);
+    if (item.latest_chapter_url.includes('-chapter-')) {
+      return item.latest_chapter_url.replace(/-chapter-[\d.-]+\/?$/, `-chapter-${suffix}/`);
+    }
+    return item.latest_chapter_url.replace(/-[\d.-]+\/?$/, `-chapter-${suffix}/`);
   }
-  return `https://arenascan.com/${slug}-${suffix}/`;
+
+  return `https://arenascan.com/${slug}-chapter-${suffix}/`;
 }
 
 export function calculateCatchUpInfo(
