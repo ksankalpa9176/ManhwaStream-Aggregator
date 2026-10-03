@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
-const REPO_NAME = 'ManhwaStream-Aggregator';
+const REPO_NAME = 'manhwa-stream';
 
 export default defineConfig(({ command }) => ({
   plugins: [react(), tailwindcss()],

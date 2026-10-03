@@ -1,9 +1,9 @@
 {
-  "name": "manhwa-stream-aggregator",
+  "name": "manhwa-stream",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "homepage": "https://ksankalpa9176.github.io/ManhwaStream-Aggregator",
+  "homepage": "https://ksankalpa9176.github.io/manhwa-stream",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
