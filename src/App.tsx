@@ -117,9 +117,18 @@ export default function App() {
   };
 
   const handleReadChapter = async (item: ManhwaItem, chapterNum: number, targetSourceId?: SourceId) => {
-    const sourceToUse = targetSourceId || selectedSource === 'all' ? (item.fastest_source_id || 'arenascan') : selectedSource;
-    const useSource = targetSourceId || sourceToUse;
-    const targetUrl = buildChapterUrlForSource(useSource, item, chapterNum);
+    let sourceToUse: SourceId = 'arenascan';
+    if (targetSourceId) {
+      sourceToUse = targetSourceId;
+    } else if (selectedSource !== 'all' && item.sources[selectedSource]) {
+      sourceToUse = selectedSource;
+    } else if (item.fastest_source_id && item.sources[item.fastest_source_id]) {
+      sourceToUse = item.fastest_source_id;
+    } else {
+      const availableSource = (Object.keys(item.sources) as SourceId[])[0];
+      sourceToUse = availableSource || 'arenascan';
+    }
+    const targetUrl = buildChapterUrlForSource(sourceToUse, item, chapterNum);
     window.open(targetUrl, '_blank', 'noopener,noreferrer');
 
     if (!currentUser) {

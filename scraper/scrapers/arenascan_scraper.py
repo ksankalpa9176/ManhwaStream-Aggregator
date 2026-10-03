@@ -37,8 +37,21 @@ class ArenaScanScraper(BaseScraper):
                 if series_url.startswith("/"):
                     series_url = self.base_url + series_url
 
-                ch_link = card.select_one("a[href*='-chapter-']") or card.select_one("a[href]")
-                chapter_url = ch_link["href"].strip() if ch_link and "href" in ch_link.attrs else ""
+                # ArenaScan uses {slug}-{N}/ format (no "-chapter-")
+                ch_link = (
+                    card.select_one("a[href*='-chapter-']")
+                    or card.select_one(".epxs a")
+                    or card.select_one(".epxs")
+                    or card.select_one("a[href]")
+                )
+                chapter_url = ""
+                if ch_link:
+                    if ch_link.name == "a" and "href" in ch_link.attrs:
+                        chapter_url = ch_link["href"].strip()
+                    else:
+                        inner_a = ch_link.find("a") or ch_link.find_parent("a")
+                        if inner_a and "href" in inner_a.attrs:
+                            chapter_url = inner_a["href"].strip()
                 if chapter_url.startswith("/"):
                     chapter_url = self.base_url + chapter_url
 

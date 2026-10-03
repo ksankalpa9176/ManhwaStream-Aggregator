@@ -9,13 +9,14 @@ export const KNOWN_SOURCES: Record<SourceId, { name: string; domain: string; def
 
 export function toCanonicalSlug(str: string): string {
   if (!str) return 'manhwa';
-  return str
-    .toLowerCase()
-    .replace(/\[.*?\]|\(.*?\)/g, '')
-    .replace(/season\s*\d+/gi, '')
-    .replace(/['']/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'manhwa';
+  let t = str.toLowerCase();
+  t = t.replace(/\[.*?\]|\(.*?\)/g, '');
+  t = t.replace(/\b(season|part|vol|volume|chapter|ch)\s*\d+/gi, '');
+  t = t.replace(/\b(official|manhwa|manhua|manga|webtoon)\b/gi, '');
+  t = t.replace(/^(the|a|an)\s+/i, '');
+  t = t.replace(/[''`]/g, '');
+  t = t.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return t || 'manhwa';
 }
 
 export const toSlug = toCanonicalSlug;
