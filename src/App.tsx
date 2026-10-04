@@ -214,10 +214,15 @@ export default function App() {
     }
 
     const sourceData = item.sources[sourceToUse];
-    const seriesUrl =
-      sourceData?.series_url ||
-      item.series_url ||
-      buildChapterUrlForSource(sourceToUse, item, latest);
+    let seriesUrl = sourceData?.series_url || item.series_url;
+
+    if (!seriesUrl) {
+      console.warn(
+        `⚠ No stored series URL for "${item.title}" on ${sourceToUse}. ` +
+        `Using constructed fallback. The scraper may not have populated this source yet.`
+      );
+      seriesUrl = buildChapterUrlForSource(sourceToUse, item, latest);
+    }
 
     // Warn if user's filter isn't available for this title
     if (selectedSource !== 'all' && !item.sources[selectedSource]) {

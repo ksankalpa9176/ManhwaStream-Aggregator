@@ -32,10 +32,21 @@ class ArenaScanScraper(BaseScraper):
 
                 canonical_slug = self.to_canonical_slug(title)
 
-                series_link = card.select_one("a[href*='/manga/']") or card.select_one("a[href]")
+                # Multi-pattern fallback: catch /manga/, /series/, /comic/, or any anchor
+                series_link = (
+                    card.select_one("a[href*='/manga/']")
+                    or card.select_one("a[href*='/series/']")
+                    or card.select_one("a[href*='/comic/']")
+                    or card.select_one("a[href]")
+                )
                 series_url = series_link["href"].strip() if series_link and "href" in series_link.attrs else ""
                 if series_url.startswith("/"):
                     series_url = self.base_url + series_url
+
+                # Validate: skip if it looks like a chapter URL
+                if series_url and ("-chapter-" in series_url or "/chapter/" in series_url):
+                    self.logger.warning(f"Skipping chapter URL (expected series URL): {series_url}")
+                    continue
 
                 # ArenaScan uses {slug}-{N}/ format (no "-chapter-")
                 ch_link = (

@@ -75,6 +75,15 @@ class RoliaScanScraper(BaseScraper):
                 if not title or not series_url:
                     continue
 
+                # Validate: must be a series URL, not a chapter URL
+                if "/read/" in series_url or "-chapter-" in series_url:
+                    self.logger.warning(f"Skipping chapter URL (expected series URL): {series_url}")
+                    continue
+
+                # Normalize relative URLs
+                if series_url.startswith("/"):
+                    series_url = self.base_url + series_url
+
                 # Extract canonical slug
                 m = re.search(r"/manga/([^/?#]+)", series_url)
                 if not m:
