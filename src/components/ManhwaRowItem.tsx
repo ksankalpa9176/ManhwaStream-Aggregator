@@ -1,7 +1,7 @@
 import React from 'react';
 import { ManhwaItem, SourceId } from '../types';
 import { calculateCatchUpInfo } from '../utils/chapterUrl';
-import { ExternalLink, Trash2, CheckCircle, Sparkles } from 'lucide-react';
+import { ExternalLink, Trash2, CheckCircle } from 'lucide-react';
 
 interface ManhwaRowItemProps {
   item: ManhwaItem;
@@ -82,12 +82,7 @@ export const ManhwaRowItem: React.FC<ManhwaRowItemProps> = ({
               </span>
             )}
 
-            {catchUp.isSeriesPageDirect && (
-              <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-medium text-amber-500 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 sm:px-2 py-0.5 rounded-md">
-                <Sparkles className="w-3 h-3 shrink-0" />
-                <span>RoliaScan: Opens series page</span>
-              </span>
-            )}
+            
           </div>
 
           {chaptersBehind > 1 && (

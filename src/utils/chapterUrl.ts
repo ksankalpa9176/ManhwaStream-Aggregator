@@ -121,7 +121,7 @@ export function calculateCatchUpInfo(
   }
 
   const chaptersBehind = Math.max(0, Math.round(targetLatestChapter - read));
-  const isSeriesPageDirect = targetSourceId === 'roliascan';
+  const isSeriesPageDirect = true; // All sources now open series URL
 
   return {
     isUnread,
