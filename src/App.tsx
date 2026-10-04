@@ -48,6 +48,12 @@ export default function App() {
   const [editingItem, setEditingItem] = useState<ManhwaItem | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [pendingCaughtUp, setPendingCaughtUp] = useState<ManhwaItem | null>(null);
+  const [pendingReadLatest, setPendingReadLatest] = useState<{
+    item: ManhwaItem;
+    source: SourceId;
+    fallbackUrl: string;
+    latest: number;
+  } | null>(null);
   const [showGuide, setShowGuide] = useState<boolean>(() => {
     try {
       return localStorage.getItem('manhwa_tracker_seen_guide') !== 'true';
@@ -206,27 +212,41 @@ export default function App() {
     const catchUp = calculateCatchUpInfo(item, selectedSource);
     const latest = catchUp.latestChapter;
 
+    // Pick the best source
     let sourceToUse: SourceId = item.fastest_source_id || 'arenascan';
-    if (selectedSource !== 'all' && item.sources[selectedSource]) {
+    if (selectedSource !== 'all' && item.sources[selectedSource]?.series_url) {
       sourceToUse = selectedSource;
     } else if (catchUp.activeSourceId) {
       sourceToUse = catchUp.activeSourceId;
     }
 
+    // If user filter doesn't have this title, ask them what to do
+    if (
+      selectedSource !== 'all' &&
+      !item.sources[selectedSource]?.series_url &&
+      item.series_url
+    ) {
+      setPendingReadLatest({
+        item,
+        source: sourceToUse,
+        fallbackUrl: item.series_url,
+        latest,
+      });
+      return;
+    }
+
+    await executeReadLatest(item, sourceToUse, latest);
+  };
+
+  const executeReadLatest = async (item: ManhwaItem, sourceToUse: SourceId, latest: number) => {
     const sourceData = item.sources[sourceToUse];
     let seriesUrl = sourceData?.series_url || item.series_url;
 
     if (!seriesUrl) {
       console.warn(
-        `⚠ No stored series URL for "${item.title}" on ${sourceToUse}. ` +
-        `Using constructed fallback. The scraper may not have populated this source yet.`
+        `⚠ No stored series URL for "${item.title}" on ${sourceToUse}. Using fallback.`
       );
       seriesUrl = buildChapterUrlForSource(sourceToUse, item, latest);
-    }
-
-    // Warn if user's filter isn't available for this title
-    if (selectedSource !== 'all' && !item.sources[selectedSource]) {
-      showToast(`${KNOWN_SOURCES[selectedSource]?.name} doesn't have this title. Opening ${KNOWN_SOURCES[sourceToUse]?.name}.`);
     }
 
     if (currentUser) {
@@ -364,23 +384,30 @@ export default function App() {
       const colRef = collection(scraperDb, 'manhwa');
 
       let firestoreData: any = null;
+      let foundVia = '';
 
-      // Lookup 1: by exact series_url
+      // Lookup 1: exact series_url match
       if (item.series_url) {
         try {
           const q1 = query(colRef, where('series_url', '==', item.series_url), limit(1));
           const snap1 = await getDocs(q1);
-          if (!snap1.empty) firestoreData = snap1.docs[0].data();
-        } catch (e) { console.warn('Lookup 1 failed:', e); }
+          if (!snap1.empty) {
+            firestoreData = snap1.docs[0].data();
+            foundVia = 'series_url';
+          }
+        } catch (e) { console.warn('[Enrich] Lookup 1 error:', e); }
       }
 
-      // Lookup 2: direct doc fetch by slug
+      // Lookup 2: direct doc fetch by canonical_slug (underscored)
       if (!firestoreData && item.canonical_slug) {
         try {
           const docRef = doc(scraperDb, 'manhwa', item.canonical_slug.replace(/-/g, '_'));
           const snap2 = await getDoc(docRef);
-          if (snap2.exists()) firestoreData = snap2.data();
-        } catch (e) { console.warn('Lookup 2 failed:', e); }
+          if (snap2.exists()) {
+            firestoreData = snap2.data();
+            foundVia = 'doc_id';
+          }
+        } catch (e) { console.warn('[Enrich] Lookup 2 error:', e); }
       }
 
       // Lookup 3: query by canonical_slug field
@@ -388,22 +415,60 @@ export default function App() {
         try {
           const q3 = query(colRef, where('canonical_slug', '==', item.canonical_slug), limit(1));
           const snap3 = await getDocs(q3);
-          if (!snap3.empty) firestoreData = snap3.docs[0].data();
-        } catch (e) { console.warn('Lookup 3 failed:', e); }
+          if (!snap3.empty) {
+            firestoreData = snap3.docs[0].data();
+            foundVia = 'canonical_slug';
+          }
+        } catch (e) { console.warn('[Enrich] Lookup 3 error:', e); }
+      }
+
+      // Lookup 4: query by exact title
+      if (!firestoreData && item.title) {
+        try {
+          const q4 = query(colRef, where('title', '==', item.title), limit(1));
+          const snap4 = await getDocs(q4);
+          if (!snap4.empty) {
+            firestoreData = snap4.docs[0].data();
+            foundVia = 'title';
+          }
+        } catch (e) { console.warn('[Enrich] Lookup 4 error:', e); }
+      }
+
+      // Lookup 5: try alternate slug from URL path (last segment)
+      if (!firestoreData && item.series_url) {
+        try {
+          const urlSlug = item.series_url.replace(/\/$/, '').split('/').pop() || '';
+          if (urlSlug) {
+            const q5 = query(colRef, where('canonical_slug', '==', urlSlug), limit(1));
+            const snap5 = await getDocs(q5);
+            if (!snap5.empty) {
+              firestoreData = snap5.docs[0].data();
+              foundVia = 'url_slug';
+            }
+          }
+        } catch (e) { console.warn('[Enrich] Lookup 5 error:', e); }
       }
 
       if (firestoreData) {
+        console.log(`[Enrich] ✅ Found doc via "${foundVia}" for "${item.title}"`);
         if (!item.cover_url && firestoreData.cover_url) item.cover_url = firestoreData.cover_url;
         if (firestoreData.latest_chapter && (!item.latest_chapter || item.latest_chapter < firestoreData.latest_chapter)) {
           item.latest_chapter = firestoreData.latest_chapter;
           item.latest_chapter_text = firestoreData.latest_chapter_text || `Chapter ${firestoreData.latest_chapter}`;
         }
+        // ALWAYS use Firestore's data if it has more sources
         if (firestoreData.series_url) item.series_url = firestoreData.series_url;
-        if (firestoreData.sources) item.sources = firestoreData.sources;
+        if (firestoreData.sources) {
+          item.sources = { ...(item.sources || {}), ...firestoreData.sources };
+        }
         if (firestoreData.fastest_source_id) item.fastest_source_id = firestoreData.fastest_source_id;
+
+        console.log(`[Enrich] Merged sources: [${Object.keys(item.sources || {}).join(', ')}]`);
+      } else {
+        console.warn(`[Enrich] ❌ No Firestore doc found for "${item.title}" (slug: ${item.canonical_slug})`);
       }
     } catch (e) {
-      console.warn('Firestore enrich failed:', e);
+      console.warn('[Enrich] Firestore enrich failed:', e);
     }
 
     await handleAddSeries(item);
@@ -587,6 +652,43 @@ export default function App() {
           setShowGuide(false);
         }}
       />
+
+      {pendingReadLatest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-4">
+            <h3 className="font-bold text-lg text-white">
+              Not on {KNOWN_SOURCES[selectedSource]?.name}
+            </h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              <strong className="text-white">{pendingReadLatest.item.title}</strong> isn't tracked
+              on <strong className="text-white">{KNOWN_SOURCES[selectedSource]?.name}</strong>.
+            </p>
+            <p className="text-xs text-zinc-400">
+              Open it on <strong className="text-white">{KNOWN_SOURCES[pendingReadLatest.source]?.name}</strong> instead?
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+              <button
+                onClick={() => setPendingReadLatest(null)}
+                className="px-4 py-2 rounded-xl text-xs text-zinc-400 hover:text-white hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const pending = pendingReadLatest;
+                  setPendingReadLatest(null);
+                  if (pending) {
+                    await executeReadLatest(pending.item, pending.source, pending.latest);
+                  }
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#ff4655] hover:bg-[#e03847] text-white"
+              >
+                Open on {KNOWN_SOURCES[pendingReadLatest.source]?.name}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pendingCaughtUp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
