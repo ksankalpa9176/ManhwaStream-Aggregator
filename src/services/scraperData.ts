@@ -58,8 +58,9 @@ export function subscribeToScrapedManhwa(
 export function subscribeToDiscoveries(
   onUpdate: (items: DiscoveryItem[]) => void
 ): () => void {
-  const colRef = collection(scraperDb, 'discoveries');
-  const q = query(colRef, orderBy('created_at', 'desc'), limit(50));
+  // Discoveries = recent updates from the latest scrape, filtered to fresh titles (<= 10 chapters)
+  const colRef = collection(scraperDb, 'manhwa');
+  const q = query(colRef, orderBy('updated_at', 'desc'), limit(500));
 
   return onSnapshot(
     q,
@@ -67,23 +68,39 @@ export function subscribeToDiscoveries(
       const items: DiscoveryItem[] = [];
       snapshot.forEach((doc) => {
         const data = doc.data();
-        const total = Number(data.total_chapters) || Number(data.latest_chapter) || 1;
-        if (total > 10) return;
+
+        // Only include titles marked recent by the last scrape
+        if (data.is_recent !== true) return;
+
+        const latest = Number(data.latest_chapter) || 0;
+        if (latest < 1 || latest > 10) return;
+
+        const sources = data.sources || {};
+        const sourceKeys = Object.keys(sources);
+        const primarySource = (data.fastest_source_id || sourceKeys[0] || 'arenascan') as SourceId;
+
+        const sourceNames: Record<string, string> = {
+          arenascan: 'ArenaScan',
+          kingofshojo: 'King of Shojo',
+          roliascan: 'RoliaScan',
+        };
 
         items.push({
           id: doc.id,
           title: data.title || doc.id,
-          source_id: (data.source_id as SourceId) || 'arenascan',
-          source_name: data.source_name || 'ArenaScan',
-          latest_chapter: Number(data.latest_chapter) || 1,
-          total_chapters: total,
-          latest_chapter_text: data.latest_chapter_text,
-          latest_chapter_url: data.latest_chapter_url,
-          series_url: data.series_url,
-          cover_url: data.cover_url,
-          is_new: data.is_new ?? true,
-          created_at: data.created_at,
+          source_id: primarySource,
+          source_name: sourceNames[primarySource] || primarySource,
+          latest_chapter: latest,
+          total_chapters: latest,
+          latest_chapter_text: data.latest_chapter_text || `Chapter ${latest}`,
+          latest_chapter_url: data.series_url || '',
+          series_url: data.series_url || '',
+          cover_url: data.cover_url || '',
+          is_new: true,
+          created_at: data.updated_at,
         });
+
+        if (items.length >= 50) return;
       });
       onUpdate(items);
     },

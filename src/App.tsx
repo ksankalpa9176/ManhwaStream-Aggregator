@@ -205,15 +205,36 @@ export default function App() {
   const handleReadLatest = async (item: ManhwaItem) => {
     const catchUp = calculateCatchUpInfo(item, selectedSource);
     const latest = catchUp.latestChapter;
-    const sourceToUse: SourceId = catchUp.activeSourceId || item.fastest_source_id || 'arenascan';
-    const seriesUrl = item.series_url || buildChapterUrlForSource(sourceToUse, item, latest);
-    window.open(seriesUrl, '_blank', 'noopener,noreferrer');
 
-    if (!currentUser) {
-      showToast(`Opened ${KNOWN_SOURCES[sourceToUse]?.name}. Sign in to save progress.`);
-      return;
+    let sourceToUse: SourceId = item.fastest_source_id || 'arenascan';
+    if (selectedSource !== 'all' && item.sources[selectedSource]) {
+      sourceToUse = selectedSource;
+    } else if (catchUp.activeSourceId) {
+      sourceToUse = catchUp.activeSourceId;
     }
-    await applyCaughtUp(item, latest);
+
+    const sourceData = item.sources[sourceToUse];
+    const seriesUrl =
+      (sourceData?.url && !sourceData.url.includes('-chapter-') ? sourceData.url : null) ||
+      item.series_url ||
+      buildChapterUrlForSource(sourceToUse, item, latest);
+
+    if (currentUser) {
+      await applyCaughtUp(item, latest);
+    } else {
+      showToast('Sign in to save progress.');
+    }
+
+    const isMobile =
+      /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+      (window.matchMedia('(max-width: 768px)').matches && 'ontouchstart' in window);
+
+    if (isMobile) {
+      window.location.href = seriesUrl;
+    } else {
+      window.open(seriesUrl, '_blank', 'noopener,noreferrer');
+      showToast(`Opened ${KNOWN_SOURCES[sourceToUse]?.name}. Progress set to Ch. ${latest}.`);
+    }
   };
 
   const handleStepChapter = async (id: string, delta: number) => {
@@ -327,6 +348,29 @@ export default function App() {
   };
 
   const handleAddCustomUrl = async (item: Partial<ManhwaItem>) => {
+    if (item.canonical_slug) {
+      try {
+        const { doc, getDoc } = await import('firebase/firestore');
+        const { scraperDb } = await import('./services/firebase');
+        const docRef = doc(scraperDb, 'manhwa', item.canonical_slug.replace(/-/g, '_'));
+        const snap = await getDoc(docRef);
+
+        if (snap.exists()) {
+          const data = snap.data();
+          if (!item.cover_url && data.cover_url) item.cover_url = data.cover_url;
+          if (data.latest_chapter && (!item.latest_chapter || item.latest_chapter < data.latest_chapter)) {
+            item.latest_chapter = data.latest_chapter;
+            item.latest_chapter_text = data.latest_chapter_text || `Chapter ${data.latest_chapter}`;
+          }
+          if (data.series_url && !item.series_url) item.series_url = data.series_url;
+          if (data.sources && !item.sources) item.sources = data.sources;
+          if (data.fastest_source_id && !item.fastest_source_id) item.fastest_source_id = data.fastest_source_id;
+        }
+      } catch (e) {
+        console.warn('Enrich from Firestore failed (non-fatal):', e);
+      }
+    }
+
     await handleAddSeries(item);
   };
 

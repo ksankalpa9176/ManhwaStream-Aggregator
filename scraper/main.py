@@ -131,9 +131,38 @@ def merge_by_canonical_slug(all_releases: List[Dict[str, Any]]) -> Dict[str, Dic
             "cover_url": cover_url,
             "sources": sources,
             "updated_at": now_iso,
+            "is_recent": True,
         }
 
     return merged
+
+
+def reset_stale_recent_flags(db, recent_doc_ids):
+    """Set is_recent=false on all manhwa docs NOT touched in this run."""
+    try:
+        docs = db.collection("manhwa").stream()
+        batch = db.batch()
+        count = 0
+        total = 0
+
+        for doc in docs:
+            if doc.id in recent_doc_ids:
+                continue
+            data = doc.to_dict() or {}
+            if data.get("is_recent") is True:
+                batch.update(doc.reference, {"is_recent": False})
+                count += 1
+                total += 1
+                if count >= 400:
+                    batch.commit()
+                    batch = db.batch()
+                    count = 0
+
+        if count > 0:
+            batch.commit()
+        logger.info(f"Reset is_recent=false on {total} stale docs")
+    except Exception as e:
+        logger.warning(f"Failed to reset stale is_recent flags: {e}")
 
 
 def main():
@@ -164,10 +193,13 @@ def main():
     logger.info(f"Total releases: {len(all_releases)}")
 
     write_stats = {"attempted": 0, "written": 0, "failed": 0}
+    recent_doc_ids = set()
     if all_releases:
         merged = merge_by_canonical_slug(all_releases)
         logger.info(f"Unique series: {len(merged)}")
         write_stats = write_to_firestore(db, merged)
+        recent_doc_ids = set(merged.keys())
+        reset_stale_recent_flags(db, recent_doc_ids)
     else:
         logger.warning("No releases — skipping Firestore write")
 

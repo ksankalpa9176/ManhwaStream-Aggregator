@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Sparkles, ExternalLink, Edit3, CheckCircle, Layers, Lock } from 'lucide-react';
+import { X, Sparkles, ExternalLink, Edit3, CheckCircle, Layers, Lock, ArrowLeft } from 'lucide-react';
 
 interface UserGuideModalProps {
   isOpen: boolean;
@@ -106,6 +106,20 @@ export const UserGuideModal: React.FC<UserGuideModalProps> = ({
               <p className="text-xs text-zinc-400 leading-relaxed">
                 Sign in to save your shelf to the cloud. Your progress appears on every device
                 where you log in with the same account.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+              <ArrowLeft className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-white text-sm mb-1">Mobile tip: use the back button</h3>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                On mobile, <strong className="text-white">Read Latest</strong> opens the source site
+                in the same tab (so your progress is saved). When you're done reading, tap your
+                browser's <strong className="text-white">back button</strong> to return.
               </p>
             </div>
           </div>
