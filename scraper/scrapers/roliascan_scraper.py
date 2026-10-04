@@ -1,126 +1,108 @@
 #!/usr/bin/env python3
 """
 RoliaScan scraper — https://roliascan.com
-Modern React/Tailwind site (not Madara). Uses href-based parsing.
-Always returns series URLs (chapter links are unstable).
+Uses the public JSON API at /wp-json/manga/v1/latest-chapters.
+Supports infinite scroll via page parameter. Returns SERIES URLs only.
 """
 import re
+import json
 from typing import List, Dict, Any
-from bs4 import BeautifulSoup
 from .base_scraper import BaseScraper
 
 
 class RoliaScanScraper(BaseScraper):
     MAX_TITLES = 200
+    API_URL = "https://roliascan.com/wp-json/manga/v1/latest-chapters"
 
     def __init__(self):
         super().__init__("roliascan", "RoliaScan", "https://roliascan.com")
 
-    def _parse_cards(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
-        """Find every anchor that points at /manga/{slug}."""
-        results = []
-        seen_slugs = set()
+    def _extract_chapter_number(self, chapter_text: str) -> float:
+        """Extract numeric chapter from strings like 'Ch. 44' or 'Chapter 44.5'."""
+        if not chapter_text:
+            return 1.0
+        m = re.search(r"(\d+(?:\.\d+)?)", chapter_text)
+        if m:
+            try:
+                return float(m.group(1))
+            except ValueError:
+                pass
+        return 1.0
 
-        for a in soup.find_all("a", href=True):
-            href = a.get("href", "")
-            if "/manga/" not in href:
-                continue
-            if "roliascan.com/manga/" not in href and not href.startswith("/manga/"):
-                continue
-
-            # Normalize to absolute URL
-            if href.startswith("/"):
-                series_url = self.base_url + href
-            else:
-                series_url = href
-
-            # Extract slug
-            m = re.search(r"/manga/([^/?#]+)", series_url)
-            if not m:
-                continue
-            slug = m.group(1)
-            if slug in seen_slugs:
-                continue
-            seen_slugs.add(slug)
-
-            # Try to find title text
-            title = a.get_text(strip=True)
-            if not title or len(title) < 2:
-                parent = a.find_parent(["div", "article", "li", "section"])
-                if parent:
-                    h = parent.find(["h1", "h2", "h3", "h4"])
-                    if h:
-                        title = h.get_text(strip=True)
-            if not title or len(title) < 2:
-                title = slug.replace("-", " ").title()
-
-            canonical_slug = self.to_canonical_slug(title)
-
-            # Try to extract chapter number from parent text
-            chapter_num = 1.0
-            parent = a.find_parent(["div", "article", "li", "section"])
-            if parent:
-                ch_match = re.search(
-                    r"(?:chapter|ch\.?)\s*(\d+(?:\.\d+)?)",
-                    parent.get_text(),
-                    re.IGNORECASE,
-                )
-                if ch_match:
-                    try:
-                        chapter_num = float(ch_match.group(1))
-                    except ValueError:
-                        pass
-
-            # Find cover image near the link
-            cover_url = ""
-            img_scope = parent or a
-            img = img_scope.find("img")
-            if img:
-                cover_url = (
-                    img.get("src")
-                    or img.get("data-src")
-                    or img.get("data-lazy-src")
-                    or ""
-                )
-                if cover_url.startswith("/"):
-                    cover_url = self.base_url + cover_url
-
-            results.append({
-                "canonical_slug": canonical_slug,
-                "title": title,
-                "chapter": chapter_num,
-                "series_url": series_url,
-                "cover_url": cover_url,
-                "source_id": self.source_id,
-                "source_name": self.name,
-            })
-
-        return results
+    def _fetch_page(self, page: int) -> List[Dict[str, Any]]:
+        """Fetch one page of latest chapters from the JSON API."""
+        url = f"{self.API_URL}?page={page}"
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        try:
+            res = self.session.post(url, headers=headers, json={}, timeout=15)
+            if res.status_code != 200:
+                self.logger.warning(f"Page {page}: HTTP {res.status_code}")
+                return []
+            data = res.json()
+            if not data.get("success"):
+                return []
+            return data.get("data", []) or []
+        except Exception as e:
+            self.logger.warning(f"Page {page} fetch failed: {e}")
+            return []
 
     def scrape_latest(self, pages: int = 5) -> List[Dict[str, Any]]:
-        self.logger.info(f"Starting RoliaScan scrape (max {self.MAX_TITLES} titles)")
-        results = []
-        seen = set()
+        self.logger.info(f"Starting RoliaScan scrape via JSON API (max {self.MAX_TITLES})")
 
-        def _add_items(items):
-            for it in items:
-                key = it["canonical_slug"]
-                if key in seen:
+        results: List[Dict[str, Any]] = []
+        seen_slugs = set()
+
+        for page in range(1, pages + 1):
+            items = self._fetch_page(page)
+            if not items:
+                self.logger.info(f"  Page {page}: no items — stopping")
+                break
+
+            added = 0
+            for item in items:
+                title = (item.get("title") or "").strip()
+                series_url = (item.get("manga_permalink") or "").strip()
+                cover_url = (item.get("cover") or "").strip()
+
+                if not title or not series_url:
                     continue
-                seen.add(key)
-                results.append(it)
-                if len(results) >= self.MAX_TITLES:
-                    return True
-            return False
 
-        # Try multiple entry points since site structure changed
-        for entry in [f"{self.base_url}/home/", f"{self.base_url}/", f"{self.base_url}/manga/"]:
-            soup = self.fetch_soup(entry)
-            if soup:
-                added = _add_items(self._parse_cards(soup))
-                self.logger.info(f"  {entry} → {len(results)} titles so far")
-                if added:
+                # Extract canonical slug
+                m = re.search(r"/manga/([^/?#]+)", series_url)
+                if not m:
+                    continue
+                slug = m.group(1)
+
+                if slug in seen_slugs:
+                    continue
+                seen_slugs.add(slug)
+
+                chapter_num = self._extract_chapter_number(item.get("chapter", ""))
+
+                results.append({
+                    "canonical_slug": slug,
+                    "title": title,
+                    "chapter": chapter_num,
+                    "series_url": series_url,
+                    "cover_url": cover_url,
+                    "source_id": self.source_id,
+                    "source_name": self.name,
+                })
+                added += 1
+
+                if len(results) >= self.MAX_TITLES:
                     break
+
+            self.logger.info(f"  Page {page}: +{added} (total {len(results)})")
+
             if len(results) >= self.MAX_TITLES:
                 break
 
