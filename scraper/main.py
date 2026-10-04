@@ -37,15 +37,24 @@ def init_firebase():
 
 def write_batch_with_retry(db, payloads: List[Dict[str, Any]], max_retries: int = 3) -> int:
     written = 0
+
+    # Build a stable list of (doc_id, body) so retries don't lose data
+    prepared = []
+    for payload in payloads:
+        body = dict(payload)          # shallow copy
+        doc_id = body.pop("_doc_id", None)
+        if not doc_id:
+            continue
+        prepared.append((doc_id, body))
+
     for attempt in range(max_retries):
         try:
             batch = db.batch()
-            for payload in payloads:
-                doc_id = payload.pop("_doc_id")
+            for doc_id, body in prepared:
                 ref = db.collection("manhwa").document(doc_id)
-                batch.set(ref, payload, merge=True)
+                batch.set(ref, body, merge=True)
             batch.commit()
-            written = len(payloads)
+            written = len(prepared)
             logger.info(f"  Batch OK ({written} docs, attempt {attempt + 1})")
             break
         except Exception as e:
@@ -65,7 +74,7 @@ def write_to_firestore(db, merged: Dict[str, Dict[str, Any]]) -> Dict[str, int]:
         payloads.append(p)
 
     stats = {"attempted": len(payloads), "written": 0, "failed": 0}
-    BATCH_SIZE = 400
+    BATCH_SIZE = 100
     for i in range(0, len(payloads), BATCH_SIZE):
         chunk = payloads[i : i + BATCH_SIZE]
         ok = write_batch_with_retry(db, chunk)
