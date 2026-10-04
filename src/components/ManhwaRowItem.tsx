@@ -11,11 +11,13 @@ interface ManhwaRowItemProps {
   onStepChapter: (id: string, delta: number) => void;
   onEditReadChapter: (item: ManhwaItem) => void;
   onDelete: (id: string, title: string) => void;
+  onCaughtUp: (item: ManhwaItem) => void;
+  onReadLatest: (item: ManhwaItem) => void;
   isDarkMode?: boolean;
 }
 
 export const ManhwaRowItem: React.FC<ManhwaRowItemProps> = ({
-  item, preferredSource, sequentialMode, onReadChapter, onStepChapter, onEditReadChapter, onDelete, isDarkMode = true
+  item, preferredSource, sequentialMode, onReadChapter, onStepChapter, onEditReadChapter, onDelete, onCaughtUp, onReadLatest, isDarkMode = true
 }) => {
   const catchUp = calculateCatchUpInfo(item, preferredSource);
   const isUnread = catchUp.isUnread;
@@ -34,11 +36,11 @@ export const ManhwaRowItem: React.FC<ManhwaRowItemProps> = ({
 
       <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0 flex-1">
         <div
-          onClick={() => onReadChapter(item, primaryChapter, catchUp.activeSourceId)}
+          onClick={() => onReadLatest(item)}
           className={`relative w-14 h-20 sm:w-16 sm:h-24 rounded-lg overflow-hidden border shrink-0 cursor-pointer shadow-md ${
             isDarkMode ? 'bg-zinc-900 border-[#2b2f42] group-hover:border-[#ff4655]' : 'bg-slate-100 border-slate-300 group-hover:border-[#ff4655]'
           }`}
-          title={`Click to read Ch. ${primaryChapter}`}
+          title={`Open ${catchUp.activeSourceName} series page`}
         >
           <img
             src={coverSrc}
@@ -58,7 +60,7 @@ export const ManhwaRowItem: React.FC<ManhwaRowItemProps> = ({
 
         <div className="min-w-0 space-y-1 sm:space-y-1.5 flex-1">
           <h3
-            onClick={() => onReadChapter(item, primaryChapter, catchUp.activeSourceId)}
+            onClick={() => onReadLatest(item)}
             className={`font-bold text-sm sm:text-lg leading-snug line-clamp-2 cursor-pointer transition-colors ${
               isDarkMode ? 'text-white hover:text-[#ff4655]' : 'text-slate-900 hover:text-[#ff4655]'
             }`}
@@ -142,12 +144,23 @@ export const ManhwaRowItem: React.FC<ManhwaRowItemProps> = ({
 
         {isUnread && (
           <button
-            onClick={() => onReadChapter(item, primaryChapter, catchUp.activeSourceId)}
+            onClick={() => onReadLatest(item)}
             className="flex items-center justify-center gap-1 px-2.5 sm:px-3.5 h-7 rounded-md text-[11px] sm:text-xs font-semibold bg-[#ff4655] hover:bg-[#e03847] text-white shadow-sm active:scale-95 whitespace-nowrap transition-colors cursor-pointer shrink-0"
-            title={catchUp.isSeriesPageDirect ? 'Open series hub' : `Open Chapter ${catchUp.nextChapter}`}
+            title={`Open ${catchUp.activeSourceName} series page (sets progress to latest)`}
           >
-            <span>{catchUp.isSeriesPageDirect ? 'Series Hub' : `Ch. ${catchUp.nextChapter}`}</span>
+            <span>Read Latest</span>
             <ExternalLink className="w-3 h-3" />
+          </button>
+        )}
+
+        {isUnread && (
+          <button
+            onClick={() => onCaughtUp(item)}
+            className="flex items-center justify-center gap-1 px-2.5 sm:px-3 h-7 rounded-md text-[11px] sm:text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm active:scale-95 whitespace-nowrap transition-colors cursor-pointer shrink-0"
+            title="Mark all chapters as read"
+          >
+            <CheckCircle className="w-3 h-3" />
+            <span className="hidden sm:inline">Caught Up</span>
           </button>
         )}
 

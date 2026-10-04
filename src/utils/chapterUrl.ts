@@ -34,47 +34,18 @@ export function formatSuffix(num: number): string {
 export function buildChapterUrlForSource(
   sourceId: SourceId,
   item: Partial<ManhwaItem>,
-  chapterNum: number
+  _chapterNum: number
 ): string {
-  const suffix = formatSuffix(chapterNum);
+  // Simpler model: always navigate to the SERIES page.
+  // Users pick the chapter on the source site, then update progress manually.
+  if (item.series_url && item.series_url.length > 0) {
+    return item.series_url;
+  }
+
   const slug = item.canonical_slug || toCanonicalSlug(item.title || 'manhwa');
-
-  // RoliaScan: ALWAYS series URL (chapter links unstable)
-  if (sourceId === 'roliascan') {
-    if (item.series_url && item.series_url.includes('roliascan.com')) {
-      return item.series_url.replace(/\/chapter-[\d.-]+\/?$/, '/');
-    }
-    const roliaSourceUrl = item.sources?.roliascan?.url;
-    if (roliaSourceUrl) return roliaSourceUrl.replace(/\/chapter-[\d.-]+\/?$/, '/');
-    return `https://roliascan.com/manga/${slug}/`;
-  }
-
-  // King of Shojo: kingofshojo.com/{slug}-chapter-{N}/
-  if (sourceId === 'kingofshojo') {
-    const existing = item.sources?.kingofshojo;
-    if (existing?.url && existing.url.includes('-chapter-')) {
-      return existing.url.replace(/-chapter-[\d.-]+\/?$/, `-chapter-${suffix}/`);
-    }
-    return `https://kingofshojo.com/${slug}-chapter-${suffix}/`;
-  }
-
-  // ArenaScan: arenascan.com/{slug}-chapter-{N}/
-  const existing = item.sources?.arenascan;
-  if (existing?.url && existing.url.includes('arenascan.com')) {
-    if (existing.url.includes('-chapter-')) {
-      return existing.url.replace(/-chapter-[\d.-]+\/?$/, `-chapter-${suffix}/`);
-    }
-    return existing.url.replace(/-[\d.-]+\/?$/, `-chapter-${suffix}/`);
-  }
-
-  if (item.latest_chapter_url && item.latest_chapter_url.includes('arenascan.com')) {
-    if (item.latest_chapter_url.includes('-chapter-')) {
-      return item.latest_chapter_url.replace(/-chapter-[\d.-]+\/?$/, `-chapter-${suffix}/`);
-    }
-    return item.latest_chapter_url.replace(/-[\d.-]+\/?$/, `-chapter-${suffix}/`);
-  }
-
-  return `https://arenascan.com/${slug}-chapter-${suffix}/`;
+  if (sourceId === 'kingofshojo') return `https://kingofshojo.com/manga/${slug}/`;
+  if (sourceId === 'roliascan')   return `https://roliascan.com/manga/${slug}/`;
+  return `https://arenascan.com/manga/${slug}/`;
 }
 
 export function calculateCatchUpInfo(

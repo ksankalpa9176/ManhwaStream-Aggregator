@@ -10,7 +10,7 @@ import {
   saveCachedWatchlist,
 } from './services/userWatchlist';
 import { subscribeToDiscoveries } from './services/scraperData';
-import { calculateCatchUpInfo, buildChapterUrlForSource, toCanonicalSlug } from './utils/chapterUrl';
+import { calculateCatchUpInfo, buildChapterUrlForSource, toCanonicalSlug, KNOWN_SOURCES } from './utils/chapterUrl';
 import { Header } from './components/Header';
 import { HeroSection } from './components/HeroSection';
 import { ManhwaRowItem } from './components/ManhwaRowItem';
@@ -19,6 +19,7 @@ import { AddSeriesModal } from './components/AddSeriesModal';
 import { AddCustomUrlModal } from './components/AddCustomUrlModal';
 import { EditChapterModal } from './components/EditChapterModal';
 import { LoginModal } from './components/LoginModal';
+import { UserGuideModal } from './components/UserGuideModal';
 import { LayoutList, Bell, Sparkles } from 'lucide-react';
 
 export default function App() {
@@ -46,6 +47,14 @@ export default function App() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ManhwaItem | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [pendingCaughtUp, setPendingCaughtUp] = useState<ManhwaItem | null>(null);
+  const [showGuide, setShowGuide] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('manhwa_tracker_seen_guide') !== 'true';
+    } catch {
+      return true;
+    }
+  });
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -157,6 +166,54 @@ export default function App() {
     }
 
     await updateReadProgress(currentUser.uid, item.id, chapterNum, catchUp.latestChapter);
+  };
+
+  const applyCaughtUp = async (item: ManhwaItem, latest: number) => {
+    if (!currentUser) return;
+    setWatchlist((prev) => {
+      const updated = prev.map((m) =>
+        m.id === item.id
+          ? { ...m, last_read_chapter: latest, has_unread: false }
+          : m
+      );
+      saveCachedWatchlist(currentUser.uid, updated);
+      return updated;
+    });
+    await updateReadProgress(currentUser.uid, item.id, latest, latest);
+    showToast(`Marked "${item.title}" as caught up (Ch. ${latest}).`);
+  };
+
+  const handleCaughtUp = async (item: ManhwaItem) => {
+    if (!currentUser) {
+      showToast('Sign in to save progress.');
+      setIsLoginModalOpen(true);
+      return;
+    }
+    const catchUp = calculateCatchUpInfo(item, selectedSource);
+    const latest = catchUp.latestChapter;
+    const current = Number(item.last_read_chapter) || 0;
+
+    // If user is significantly behind, ask for confirmation
+    if (current > 0 && latest - current > 5) {
+      setPendingCaughtUp(item);
+      return;
+    }
+
+    await applyCaughtUp(item, latest);
+  };
+
+  const handleReadLatest = async (item: ManhwaItem) => {
+    const catchUp = calculateCatchUpInfo(item, selectedSource);
+    const latest = catchUp.latestChapter;
+    const sourceToUse: SourceId = catchUp.activeSourceId || item.fastest_source_id || 'arenascan';
+    const seriesUrl = item.series_url || buildChapterUrlForSource(sourceToUse, item, latest);
+    window.open(seriesUrl, '_blank', 'noopener,noreferrer');
+
+    if (!currentUser) {
+      showToast(`Opened ${KNOWN_SOURCES[sourceToUse]?.name}. Sign in to save progress.`);
+      return;
+    }
+    await applyCaughtUp(item, latest);
   };
 
   const handleStepChapter = async (id: string, delta: number) => {
@@ -320,6 +377,7 @@ export default function App() {
         onOpenAddModal={() => setIsAddModalOpen(true)}
         onOpenAddUrlModal={() => setIsAddUrlModalOpen(true)}
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
+        onOpenGuide={() => setShowGuide(true)}
         currentUser={currentUser}
         selectedSource={selectedSource}
         onSelectSource={handleSelectSource}
@@ -418,6 +476,8 @@ export default function App() {
                   onStepChapter={handleStepChapter}
                   onEditReadChapter={(it) => setEditingItem(it)}
                   onDelete={handleDeleteSeries}
+                  onCaughtUp={handleCaughtUp}
+                  onReadLatest={handleReadLatest}
                   isDarkMode={isDarkMode}
                 />
               ))}
@@ -439,6 +499,50 @@ export default function App() {
       <AddCustomUrlModal isOpen={isAddUrlModalOpen} onClose={() => setIsAddUrlModalOpen(false)} onAdd={handleAddCustomUrl} />
       <EditChapterModal item={editingItem} onClose={() => setEditingItem(null)} onSave={handleSaveEditChapter} />
       <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} currentUser={currentUser} onUserChanged={handleUserChanged} />
+
+      <UserGuideModal
+        isOpen={showGuide}
+        onClose={() => setShowGuide(false)}
+        onDontShowAgain={() => {
+          try { localStorage.setItem('manhwa_tracker_seen_guide', 'true'); } catch {}
+          setShowGuide(false);
+        }}
+      />
+
+      {pendingCaughtUp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-4">
+            <h3 className="font-bold text-lg text-white">Mark as caught up?</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              You are at <strong className="text-white">Chapter {Number(pendingCaughtUp.last_read_chapter) || 0}</strong> of{' '}
+              <strong className="text-white">{pendingCaughtUp.title}</strong>.
+              The latest is <strong className="text-white">Chapter {calculateCatchUpInfo(pendingCaughtUp, selectedSource).latestChapter}</strong>.
+            </p>
+            <p className="text-xs text-zinc-500">
+              This will mark all intermediate chapters as read.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+              <button
+                onClick={() => setPendingCaughtUp(null)}
+                className="px-4 py-2 rounded-xl text-xs text-zinc-400 hover:text-white hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const item = pendingCaughtUp;
+                  const latest = calculateCatchUpInfo(item, selectedSource).latestChapter;
+                  setPendingCaughtUp(null);
+                  await applyCaughtUp(item, latest);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white"
+              >
+                Mark as Read
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

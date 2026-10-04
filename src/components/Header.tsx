@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, Sun, Moon, Plus, Filter, User, Link2 } from 'lucide-react';
+import { BookOpen, Sun, Moon, Plus, Filter, User, Link2, HelpCircle } from 'lucide-react';
 import { UserAccount, SourceId } from '../types';
 
 interface HeaderProps {
@@ -8,6 +8,7 @@ interface HeaderProps {
   onOpenAddModal: () => void;
   onOpenAddUrlModal: () => void;
   onOpenLoginModal: () => void;
+  onOpenGuide: () => void;
   currentUser: UserAccount | null;
   selectedSource: SourceId;
   onSelectSource: (source: SourceId) => void;
@@ -19,6 +20,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAddModal,
   onOpenAddUrlModal,
   onOpenLoginModal,
+  onOpenGuide,
   currentUser,
   selectedSource,
   onSelectSource,
@@ -91,6 +93,17 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="font-semibold hidden lg:inline">
               {currentUser ? 'Library' : 'Sign In'}
             </span>
+          </button>
+
+          <button
+            onClick={onOpenGuide}
+            className={`p-1.5 rounded-lg border transition-colors cursor-pointer shrink-0 ${
+              isDarkMode ? 'bg-[#12141d] hover:bg-[#1c1f2e] border-[#222638] text-blue-400' : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700'
+            }`}
+            aria-label="Help"
+            title="How to use ManhwaStream"
+          >
+            <HelpCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
 
           <button
