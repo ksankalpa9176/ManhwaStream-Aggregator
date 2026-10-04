@@ -353,27 +353,52 @@ export default function App() {
   };
 
   const handleAddCustomUrl = async (item: Partial<ManhwaItem>) => {
-    if (item.canonical_slug) {
-      try {
-        const { doc, getDoc } = await import('firebase/firestore');
-        const { scraperDb } = await import('./services/firebase');
-        const docRef = doc(scraperDb, 'manhwa', item.canonical_slug.replace(/-/g, '_'));
-        const snap = await getDoc(docRef);
+    try {
+      const { collection, query, where, limit, getDocs, doc, getDoc } = await import('firebase/firestore');
+      const { scraperDb } = await import('./services/firebase');
+      const colRef = collection(scraperDb, 'manhwa');
 
-        if (snap.exists()) {
-          const data = snap.data();
-          if (!item.cover_url && data.cover_url) item.cover_url = data.cover_url;
-          if (data.latest_chapter && (!item.latest_chapter || item.latest_chapter < data.latest_chapter)) {
-            item.latest_chapter = data.latest_chapter;
-            item.latest_chapter_text = data.latest_chapter_text || `Chapter ${data.latest_chapter}`;
-          }
-          if (data.series_url && !item.series_url) item.series_url = data.series_url;
-          if (data.sources && !item.sources) item.sources = data.sources;
-          if (data.fastest_source_id && !item.fastest_source_id) item.fastest_source_id = data.fastest_source_id;
-        }
-      } catch (e) {
-        console.warn('Enrich from Firestore failed (non-fatal):', e);
+      let firestoreData: any = null;
+
+      // Lookup 1: by exact series_url
+      if (item.series_url) {
+        try {
+          const q1 = query(colRef, where('series_url', '==', item.series_url), limit(1));
+          const snap1 = await getDocs(q1);
+          if (!snap1.empty) firestoreData = snap1.docs[0].data();
+        } catch (e) { console.warn('Lookup 1 failed:', e); }
       }
+
+      // Lookup 2: direct doc fetch by slug
+      if (!firestoreData && item.canonical_slug) {
+        try {
+          const docRef = doc(scraperDb, 'manhwa', item.canonical_slug.replace(/-/g, '_'));
+          const snap2 = await getDoc(docRef);
+          if (snap2.exists()) firestoreData = snap2.data();
+        } catch (e) { console.warn('Lookup 2 failed:', e); }
+      }
+
+      // Lookup 3: query by canonical_slug field
+      if (!firestoreData && item.canonical_slug) {
+        try {
+          const q3 = query(colRef, where('canonical_slug', '==', item.canonical_slug), limit(1));
+          const snap3 = await getDocs(q3);
+          if (!snap3.empty) firestoreData = snap3.docs[0].data();
+        } catch (e) { console.warn('Lookup 3 failed:', e); }
+      }
+
+      if (firestoreData) {
+        if (!item.cover_url && firestoreData.cover_url) item.cover_url = firestoreData.cover_url;
+        if (firestoreData.latest_chapter && (!item.latest_chapter || item.latest_chapter < firestoreData.latest_chapter)) {
+          item.latest_chapter = firestoreData.latest_chapter;
+          item.latest_chapter_text = firestoreData.latest_chapter_text || `Chapter ${firestoreData.latest_chapter}`;
+        }
+        if (firestoreData.series_url) item.series_url = firestoreData.series_url;
+        if (firestoreData.sources) item.sources = firestoreData.sources;
+        if (firestoreData.fastest_source_id) item.fastest_source_id = firestoreData.fastest_source_id;
+      }
+    } catch (e) {
+      console.warn('Firestore enrich failed:', e);
     }
 
     await handleAddSeries(item);

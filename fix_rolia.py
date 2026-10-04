@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+import pathlib
+
+p = pathlib.Path('scraper/scrapers/roliascan_scraper.py')
+
+new_content = '''#!/usr/bin/env python3
 """
 RoliaScan scraper — https://roliascan.com
 Modern React/Tailwind site (not Madara). Uses href-based parsing.
@@ -61,7 +65,7 @@ class RoliaScanScraper(BaseScraper):
             parent = a.find_parent(["div", "article", "li", "section"])
             if parent:
                 ch_match = re.search(
-                    r"(?:chapter|ch\.?)\s*(\d+(?:\.\d+)?)",
+                    r"(?:chapter|ch\\.?)\\s*(\\d+(?:\\.\\d+)?)",
                     parent.get_text(),
                     re.IGNORECASE,
                 )
@@ -126,3 +130,12 @@ class RoliaScanScraper(BaseScraper):
 
         self.logger.info(f"RoliaScan: {len(results)} titles")
         return results[:self.MAX_TITLES]
+'''
+
+p.write_text(new_content, encoding='utf-8')
+print("OK - RoliaScan scraper rewritten")
+
+# Syntax check
+import ast
+ast.parse(new_content)
+print("OK - syntax valid")

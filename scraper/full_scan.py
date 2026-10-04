@@ -53,7 +53,7 @@ def scan_arenascan() -> List[Dict[str, Any]]:
     results = []
     seen: Set[str] = set()
     for page in range(1, MAX_PAGES + 1):
-        url = f"{base}/manga/" if page == 1 else f"{base}/manga/page/{page}/"
+        url = f"{base}/" if page == 1 else f"{base}/page/{page}/"
         try:
             r = requests.get(url, headers=HEADERS, timeout=15)
             if r.status_code != 200:
