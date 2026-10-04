@@ -141,61 +141,21 @@ def scan_kingofshojo() -> List[Dict[str, Any]]:
 
 
 def scan_roliascan() -> List[Dict[str, Any]]:
-    base = "https://roliascan.com"
-    ajax_url = f"{base}/wp-admin/admin-ajax.php"
-    results = []
-    seen: Set[str] = set()
-
-    def _extract(soup):
-        cards = soup.select(".page-item-detail, .manga-item, .bsx, article, .item-summary")
-        if not cards:
-            cards = soup.select(".col-6, .col-md-3, .col-sm-4")
-        new = 0
-        for card in cards:
-            t_el = card.select_one("h3 a") or card.select_one("h4 a") or card.select_one("a[title]") or card.select_one(".tt")
-            if not t_el:
-                continue
-            title = t_el.get_text(strip=True) or t_el.get("title", "")
-            slug = to_canonical_slug(title)
-            if slug in seen:
-                continue
-            seen.add(slug)
-            series_url = t_el.get("href", "").strip() if t_el else ""
-            if series_url.startswith("/"):
-                series_url = base + series_url
-            img_el = card.select_one("img")
-            cover = ""
-            if img_el:
-                cover = img_el.get("src") or img_el.get("data-src") or ""
-                if cover.startswith("/"):
-                    cover = base + cover
-            results.append({"canonical_slug": slug, "title": title, "series_url": series_url, "cover_url": cover, "source_id": "roliascan", "source_name": "RoliaScan"})
-            new += 1
-        return new
-
-    try:
-        r = requests.get(f"{base}/home/", headers=HEADERS, timeout=15)
-        if r.status_code == 200:
-            n = _extract(BeautifulSoup(r.text, "html.parser"))
-            logger.info(f"RoliaScan home: +{n}")
-    except Exception as e:
-        logger.warning(f"RoliaScan home: {e}")
-
-    for p in range(1, MAX_PAGES):
-        try:
-            payload = {"action": "madara_load_more", "page": p, "template": "madara-core/content/content-archive", "vars[paged]": p + 1, "vars[post_type]": "wp-manga", "vars[orderby]": "latest"}
-            res = requests.post(ajax_url, data=payload, headers=HEADERS, timeout=15)
-            if res.status_code != 200 or len(res.text.strip()) < 50:
-                break
-            n = _extract(BeautifulSoup(res.text, "html.parser"))
-            logger.info(f"RoliaScan AJAX {p}: +{n} (total {len(results)})")
-            if n == 0:
-                break
-            time.sleep(0.4)
-        except Exception as e:
-            logger.warning(f"RoliaScan AJAX {p}: {e}")
-            break
-    return results
+    """Use the RoliaScanScraper class (JSON API based)."""
+    from scrapers.roliascan_scraper import RoliaScanScraper
+    scraper = RoliaScanScraper()
+    items = scraper.scrape_latest(pages=20)  # up to 200 titles
+    return [
+        {
+            "canonical_slug": it["canonical_slug"],
+            "title": it["title"],
+            "series_url": it["series_url"],
+            "cover_url": it["cover_url"],
+            "source_id": it["source_id"],
+            "source_name": it["source_name"],
+        }
+        for it in items
+    ]
 
 
 def write_catalog_entries(db, items: List[Dict[str, Any]]):
