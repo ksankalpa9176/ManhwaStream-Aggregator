@@ -3,10 +3,9 @@ export type SourceId = 'all' | 'arenascan' | 'kingofshojo' | 'roliascan';
 export interface SourceReleaseData {
   chapter: number;
   chapter_text?: string;
-  url: string;
+  series_url: string;
   updated_at: string;
   status?: 'active' | 'stale';
-  is_series_direct?: boolean;
 }
 
 export interface ManhwaItem {

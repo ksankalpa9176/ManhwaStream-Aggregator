@@ -74,7 +74,6 @@ class ArenaScanScraper(BaseScraper):
                     "canonical_slug": canonical_slug,
                     "title": title,
                     "chapter": chapter_num,
-                    "chapter_url": chapter_url,
                     "series_url": series_url,
                     "cover_url": cover_url,
                     "source_id": self.source_id,

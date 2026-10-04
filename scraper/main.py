@@ -89,34 +89,26 @@ def merge_by_canonical_slug(all_releases: List[Dict[str, Any]]) -> Dict[str, Dic
         sources: Dict[str, Any] = {}
         highest = 0.0
         fastest_source = "arenascan"
-        fastest_url = ""
         series_url = ""
         cover_url = ""
 
         for rel in releases:
             src = rel["source_id"]
             ch = rel["chapter"]
-            if src == "roliascan":
-                url = rel.get("series_url") or rel["chapter_url"]
-                is_series = True
-            else:
-                url = rel["chapter_url"]
-                is_series = False
+            rel_series_url = rel.get("series_url", "")
 
             sources[src] = {
                 "chapter": ch,
                 "chapter_text": f"Chapter {ch}",
-                "url": url,
+                "series_url": rel_series_url,
                 "updated_at": now_iso,
                 "status": "active",
-                "is_series_direct": is_series,
             }
             if ch > highest:
                 highest = ch
                 fastest_source = src
-                fastest_url = url
-            if not series_url and rel.get("series_url"):
-                series_url = rel["series_url"]
+            if not series_url and rel_series_url:
+                series_url = rel_series_url
             if not cover_url and rel.get("cover_url"):
                 cover_url = rel["cover_url"]
 
@@ -125,7 +117,6 @@ def merge_by_canonical_slug(all_releases: List[Dict[str, Any]]) -> Dict[str, Dic
             "canonical_slug": slug,
             "latest_chapter": highest,
             "latest_chapter_text": f"Chapter {highest}",
-            "latest_chapter_url": fastest_url,
             "fastest_source_id": fastest_source,
             "series_url": series_url,
             "cover_url": cover_url,

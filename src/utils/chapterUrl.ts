@@ -36,15 +36,17 @@ export function buildChapterUrlForSource(
   item: Partial<ManhwaItem>,
   _chapterNum: number
 ): string {
-  // Simpler model: always navigate to the SERIES page.
-  // Users pick the chapter on the source site, then update progress manually.
-  if (item.series_url && item.series_url.length > 0) {
-    return item.series_url;
-  }
+  // Prefer per-source series URL
+  const sourceUrl = item.sources?.[sourceId]?.series_url;
+  if (sourceUrl) return sourceUrl;
 
+  // Fall back to primary series URL
+  if (item.series_url) return item.series_url;
+
+  // Last resort: construct from slug
   const slug = item.canonical_slug || toCanonicalSlug(item.title || 'manhwa');
   if (sourceId === 'kingofshojo') return `https://kingofshojo.com/manga/${slug}/`;
-  if (sourceId === 'roliascan')   return `https://roliascan.com/manga/${slug}/`;
+  if (sourceId === 'roliascan') return `https://roliascan.com/manga/${slug}/`;
   return `https://arenascan.com/manga/${slug}/`;
 }
 
@@ -70,7 +72,7 @@ export function calculateCatchUpInfo(
         sourceId: srcId,
         sourceName: KNOWN_SOURCES[srcId]?.name || srcId,
         chapter: data.chapter,
-        url: data.url,
+        url: data.series_url,
         isFastest: false,
       });
     }

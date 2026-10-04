@@ -215,9 +215,14 @@ export default function App() {
 
     const sourceData = item.sources[sourceToUse];
     const seriesUrl =
-      (sourceData?.url && !sourceData.url.includes('-chapter-') ? sourceData.url : null) ||
+      sourceData?.series_url ||
       item.series_url ||
       buildChapterUrlForSource(sourceToUse, item, latest);
+
+    // Warn if user's filter isn't available for this title
+    if (selectedSource !== 'all' && !item.sources[selectedSource]) {
+      showToast(`${KNOWN_SOURCES[selectedSource]?.name} doesn't have this title. Opening ${KNOWN_SOURCES[sourceToUse]?.name}.`);
+    }
 
     if (currentUser) {
       await applyCaughtUp(item, latest);

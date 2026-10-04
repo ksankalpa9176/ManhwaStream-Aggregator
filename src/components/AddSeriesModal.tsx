@@ -43,7 +43,7 @@ export const AddSeriesModal: React.FC<AddSeriesModalProps> = ({ isOpen, onClose,
         arenascan: {
           chapter: latest,
           chapter_text: `Chapter ${latest}`,
-          url: arenaChapterUrl,
+          series_url: `https://arenascan.com/manga/${slug}/`,
           updated_at: new Date().toISOString(),
           status: 'active',
         },
